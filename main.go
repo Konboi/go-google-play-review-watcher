@@ -278,7 +278,7 @@ func PostReview(config Config, reviews []Review) error {
 	attachments := []SlackAttachment{}
 
 	for i, review := range reviews {
-		if i > config.ReviewCount {
+		if i >= config.ReviewCount {
 			break
 		}
 

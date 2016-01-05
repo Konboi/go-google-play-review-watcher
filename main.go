@@ -272,6 +272,10 @@ func SaveReviews(reviews []Review) ([]Review, error) {
 func PostReview(config Config, reviews []Review) error {
 	attachments := []SlackAttachment{}
 
+	if 1 > len(reviews)  {
+		return nil
+	}
+
 	for i, review := range reviews {
 		if i >= config.ReviewCount {
 			break

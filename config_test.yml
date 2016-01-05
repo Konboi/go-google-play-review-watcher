@@ -1,0 +1,7 @@
+bot_name: "review_woman"
+icon_emoji: ":ok_woman:"
+message_text: "Google Play Review:"
+web_hook_uri: "<SET YOUR SLACK WEB HOOK URL>"
+app_id: "<SET YOUR Google Play App Id"
+db_path: "/tmp/review_db"
+review_count: 5

@@ -2,6 +2,8 @@
 
 google-play-review-watcher is an incoming webhook that posts app reviews from the Google Play to Slack
 
+inspired by [laouji/jordgubbe](https://github.com/laouji/jordgubbe)
+
 ### Installation
 
 1. `go get github.com/Konboi/go-google-play-review-watcher`

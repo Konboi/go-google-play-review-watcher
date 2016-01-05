@@ -14,7 +14,6 @@ import (
 
 	"github.com/PuerkitoBio/goquery"
 	_ "github.com/mattn/go-sqlite3"
-	"github.com/russross/meddler"
 	"gopkg.in/yaml.v2"
 )
 
@@ -80,10 +79,6 @@ var (
 	dbh        *DBH
 	configFile = flag.String("c", "config.yml", "config file")
 )
-
-func init() {
-	meddler.Default = meddler.SQLite
-}
 
 func GetDBH() *DBH {
 	return dbh

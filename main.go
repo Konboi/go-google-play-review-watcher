@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"database/sql"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -21,7 +23,7 @@ type Config struct {
 	ReviewCount int    `yaml:"review_count"`
 	BotName     string `yaml:"bot_name"`
 	IconEmoji   string `yaml:"icon_emoji"`
-	MessageText string `yaml:"message_text`
+	MessageText string `yaml:"message_text"`
 	WebHookUri  string `yaml:"web_hook_uri"`
 	DbPath      string `yaml:"db_path"`
 }
@@ -40,16 +42,37 @@ type DBH struct {
 	*sql.DB
 }
 
+type SlackPayload struct {
+	Text        string            `json:"text"`
+	UserName    string            `json:"username"`
+	IconEmoji   string            `json:"icon_emoji"`
+	Attachments []SlackAttachment `json:"attachments"`
+}
+
+type SlackAttachment struct {
+	Title     string                 `json:"title"`
+	TitleLink string                 `json:"title_link"`
+	Text      string                 `json:"text"`
+	Fallback  string                 `json:"fallback"`
+	Fields    []SlackAttachmentField `json:"fields"`
+}
+
+type SlackAttachmentField struct {
+	Title string `json:"title"`
+	Value string `json:"value"`
+	Short bool   `json:"short"`
+}
+
 const (
 	TABLE_NAME                = "review"
-	BASE_URL                  = "https://play.google.com/store/apps/details"
+	BASE_URI                  = "https://play.google.com"
 	REVIEW_CLASS_NAME         = ".single-review"
 	AUTHOR_NAME_CLASS_NAME    = ".review-info span.author-name a"
 	REVIEW_DATE_CLASS_NAME    = ".review-info .review-date"
 	REVIEW_TITLE_CLASS_NAME   = ".review-body .review-title"
 	REVIEW_MESSAGE_CLASS_NAME = ".review-body"
 	REVIEW_RATE_CLASS_NAME    = ".review-info-star-rating .tiny-star"
-	RAITING_EMOJI             = ":start:"
+	RAITING_EMOJI             = ":star:"
 	MAX_REVIEW_NUM            = 40
 )
 
@@ -113,7 +136,8 @@ func NewConfig(path string) (config Config, err error) {
 
 	dbh = &DBH{db}
 
-	uri := fmt.Sprintf("%s?id=%s", BASE_URL, config.AppId)
+	uri := fmt.Sprintf("%s/store/apps/details?id=%s", BASE_URI, config.AppId)
+
 	res, err := http.Get(uri)
 	if err != nil {
 		return config, err
@@ -134,6 +158,9 @@ func main() {
 		log.Println(err)
 		return
 	}
+
+	log.Println("start get google play app review")
+
 	reviews, err := GetReview(config)
 	if err != nil {
 		log.Println(err)
@@ -145,10 +172,18 @@ func main() {
 		log.Println(err)
 		return
 	}
+
+	err = PostReview(config, reviews)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+
+	log.Println("done")
 }
 
 func GetReview(config Config) ([]Review, error) {
-	uri := fmt.Sprintf("%s?id=%s", BASE_URL, config.AppId)
+	uri := fmt.Sprintf("%s/store/apps/details?id=%s", BASE_URI, config.AppId)
 	doc, err := goquery.NewDocument(uri)
 
 	if err != nil {
@@ -217,27 +252,79 @@ func SaveReviews(reviews []Review) ([]Review, error) {
 
 	for _, review := range reviews {
 		var id int
-		row := dbh.QueryRow(`SELECT id FROM `+TABLE_NAME+` WHERE author_uri = ?`, review.AuthorUri)
+		row := dbh.QueryRow("SELECT id FROM review WHERE author_uri = ?", review.AuthorUri)
 		err := row.Scan(&id)
 
 		if err != nil {
 			if err.Error() != "sql: no rows in result set" {
 				return postReviews, err
 			}
-
-			id = 0
 		}
+
 		if id == 0 {
-			dbh := GetDBH()
-			review.Id = dbh.LastInsertId(TABLE_NAME) + 1
-			err := meddler.Insert(dbh, TABLE_NAME, review)
+			_, err := dbh.Exec("INSERT INTO review (author, author_uri, updated_at) VALUES (?, ?, ?)",
+				review.Author, review.AuthorUri, review.UpdatedAt)
 			if err != nil {
 				return postReviews, err
 			}
 			postReviews = append(postReviews, review)
 		}
-		fmt.Println(review.Author)
 	}
 
 	return postReviews, nil
+}
+
+func PostReview(config Config, reviews []Review) error {
+	attachments := []SlackAttachment{}
+
+	for i, review := range reviews {
+		if i > config.ReviewCount {
+			break
+		}
+
+		fields := []SlackAttachmentField{}
+
+		fields = append(fields, SlackAttachmentField{
+			Title: "Raiting",
+			Value: review.Rate,
+			Short: true,
+		})
+
+		fields = append(fields, SlackAttachmentField{
+			Title: "UpdatedAt",
+			Value: review.UpdatedAt.Format("2006-01-02"),
+			Short: true,
+		})
+
+		attachments = append(attachments, SlackAttachment{
+			Title:     review.Title,
+			TitleLink: fmt.Sprintf("%s%s", BASE_URI, review.AuthorUri),
+			Text:      review.Message,
+			Fallback:  review.Title + " " + review.AuthorUri,
+			Fields:    fields,
+		})
+	}
+
+	slackPayload := SlackPayload{
+		UserName:    config.BotName,
+		IconEmoji:   config.IconEmoji,
+		Text:        config.MessageText,
+		Attachments: attachments,
+	}
+	payload, err := json.Marshal(slackPayload)
+	if err != nil {
+		return err
+	}
+
+	req, _ := http.NewRequest("POST", config.WebHookUri, bytes.NewBuffer([]byte(payload)))
+	req.Header.Set("Content-Type", "application/json")
+
+	client := http.DefaultClient
+	res, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+
+	return nil
 }

@@ -277,7 +277,7 @@ func SaveReviews(reviews Reviews) (Reviews, error) {
 func PostReview(config Config, reviews Reviews) error {
 	attachments := []SlackAttachment{}
 
-	if 1 > len(reviews)  {
+	if 1 > len(reviews) {
 		return nil
 	}
 

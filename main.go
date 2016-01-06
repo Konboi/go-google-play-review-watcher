@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -36,6 +37,8 @@ type Review struct {
 	Rate      string
 	UpdatedAt time.Time `meddler:"updated_at,localtime"`
 }
+
+type Reviews []Review
 
 type DBH struct {
 	*sql.DB
@@ -177,7 +180,7 @@ func main() {
 	log.Println("done")
 }
 
-func GetReview(config Config) ([]Review, error) {
+func GetReview(config Config) (Reviews, error) {
 	uri := fmt.Sprintf("%s/store/apps/details?id=%s", BASE_URI, config.AppId)
 	doc, err := goquery.NewDocument(uri)
 
@@ -185,7 +188,7 @@ func GetReview(config Config) ([]Review, error) {
 		return nil, err
 	}
 
-	reviews := []Review{}
+	reviews := Reviews{}
 
 	doc.Find(REVIEW_CLASS_NAME).Each(func(i int, s *goquery.Selection) {
 		authorNode := s.Find(AUTHOR_NAME_CLASS_NAME)
@@ -220,6 +223,8 @@ func GetReview(config Config) ([]Review, error) {
 		reviews = append(reviews, review)
 	})
 
+	sort.Sort(reviews)
+
 	return reviews, nil
 }
 
@@ -242,8 +247,8 @@ func parseRate(message string) string {
 	return rate
 }
 
-func SaveReviews(reviews []Review) ([]Review, error) {
-	postReviews := []Review{}
+func SaveReviews(reviews Reviews) (Reviews, error) {
+	postReviews := Reviews{}
 
 	for _, review := range reviews {
 		var id int
@@ -269,7 +274,7 @@ func SaveReviews(reviews []Review) ([]Review, error) {
 	return postReviews, nil
 }
 
-func PostReview(config Config, reviews []Review) error {
+func PostReview(config Config, reviews Reviews) error {
 	attachments := []SlackAttachment{}
 
 	if 1 > len(reviews)  {
@@ -326,4 +331,16 @@ func PostReview(config Config, reviews []Review) error {
 	defer res.Body.Close()
 
 	return nil
+}
+
+func (r Reviews) Len() int {
+	return len(r)
+}
+
+func (r Reviews) Swap(i, j int) {
+	r[i], r[j] = r[j], r[i]
+}
+
+func (r Reviews) Less(i, j int) bool {
+	return r[i].UpdatedAt.Unix() > r[j].UpdatedAt.Unix()
 }

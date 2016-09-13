@@ -69,8 +69,9 @@ const (
 	TABLE_NAME                = "review"
 	BASE_URI                  = "https://play.google.com"
 	REVIEW_CLASS_NAME         = ".single-review"
-	AUTHOR_NAME_CLASS_NAME    = ".review-info span.author-name a"
-	REVIEW_DATE_CLASS_NAME    = ".review-info .review-date"
+	AUTHOR_NAME_CLASS_NAME    = ".review-header .review-info span.author-name"
+	REVIEW_LINK_CLASS_NAME    = ".review-header .review-info .reviews-permalink"
+	REVIEW_DATE_CLASS_NAME    = ".review-header .review-info .review-date"
 	REVIEW_TITLE_CLASS_NAME   = ".review-body .review-title"
 	REVIEW_MESSAGE_CLASS_NAME = ".review-body"
 	REVIEW_RATE_CLASS_NAME    = ".review-info-star-rating .tiny-star"
@@ -194,7 +195,7 @@ func GetReview(config Config) (Reviews, error) {
 		authorNode := s.Find(AUTHOR_NAME_CLASS_NAME)
 
 		authorName := authorNode.Text()
-		authorUri, _ := authorNode.Attr("href")
+		permalink, _ := s.Find(REVIEW_LINK_CLASS_NAME).Attr("href")
 
 		dateNode := s.Find(REVIEW_DATE_CLASS_NAME)
 
@@ -213,7 +214,7 @@ func GetReview(config Config) (Reviews, error) {
 
 		review := Review{
 			Author:    authorName,
-			AuthorUri: authorUri,
+			AuthorUri: permalink,
 			Title:     reviewTitle,
 			Message:   reviewMessage,
 			Rate:      rate,
